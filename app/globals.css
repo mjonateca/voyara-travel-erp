@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { --canvas: 242 245 246; --surface: 255 255 255; --ink: 20 35 54; --muted: 97 111 125; --line: 210 220 225; --accent: 16 116 116; }
+.dark { --canvas: 14 23 34; --surface: 22 34 48; --ink: 232 239 244; --muted: 158 174 187; --line: 70 86 101; --accent: 72 187 174; }
+* { border-color: rgb(var(--line) / .72); }
+body { min-height: 100vh; color: rgb(var(--ink)); background: radial-gradient(circle at 88% 6%, rgb(var(--accent) / .09), transparent 27rem), radial-gradient(circle at 13% 95%, rgb(170 132 80 / .08), transparent 25rem), rgb(var(--canvas)); font-family: Arial, Helvetica, sans-serif; }
+::selection { background: rgb(var(--accent) / .22); }
+.glass { background: rgb(var(--surface) / .66); backdrop-filter: blur(18px) saturate(140%); border: 1px solid rgb(var(--line) / .64); box-shadow: 0 16px 45px rgb(20 35 54 / .09), 0 2px 8px rgb(20 35 54 / .04); }
+.dark .glass { background: rgb(var(--surface) / .72); box-shadow: 0 16px 45px rgb(0 0 0 / .22); }

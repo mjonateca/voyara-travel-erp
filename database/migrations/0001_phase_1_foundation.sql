@@ -1,0 +1,16 @@
+-- Phase 1: tenant boundary and RBAC. Apply with Supabase CLI.
+create extension if not exists "pgcrypto";
+create table if not exists public.tenants (id uuid primary key default gen_random_uuid(), name text not null, slug text not null unique, created_at timestamptz not null default now());
+create table if not exists public.companies (id uuid primary key default gen_random_uuid(), tenant_id uuid not null references public.tenants(id), name text not null, base_currency char(3) not null, created_at timestamptz not null default now());
+create table if not exists public.offices (id uuid primary key default gen_random_uuid(), tenant_id uuid not null references public.tenants(id), company_id uuid not null references public.companies(id), name text not null, timezone text not null, created_at timestamptz not null default now());
+create table if not exists public.departments (id uuid primary key default gen_random_uuid(), tenant_id uuid not null references public.tenants(id), company_id uuid not null references public.companies(id), office_id uuid references public.offices(id), name text not null, created_at timestamptz not null default now());
+create table if not exists public.profiles (id uuid primary key references auth.users(id), tenant_id uuid not null references public.tenants(id), display_name text not null, company_id uuid references public.companies(id), office_id uuid references public.offices(id), created_at timestamptz not null default now());
+create table if not exists public.roles (id uuid primary key default gen_random_uuid(), tenant_id uuid not null references public.tenants(id), code text not null, name text not null, unique (tenant_id, code));
+create table if not exists public.permissions (id uuid primary key default gen_random_uuid(), code text not null unique, description text not null);
+create table if not exists public.user_roles (user_id uuid not null references public.profiles(id), role_id uuid not null references public.roles(id), primary key(user_id, role_id));
+create table if not exists public.role_permissions (role_id uuid not null references public.roles(id), permission_id uuid not null references public.permissions(id), primary key(role_id, permission_id));
+create table if not exists public.audit_logs (id uuid primary key default gen_random_uuid(), tenant_id uuid not null references public.tenants(id), actor_id uuid references public.profiles(id), entity_type text not null, entity_id uuid, action text not null, before_data jsonb, after_data jsonb, created_at timestamptz not null default now());
+create index if not exists profiles_tenant_idx on public.profiles(tenant_id); create index if not exists audit_logs_tenant_created_idx on public.audit_logs(tenant_id, created_at desc);
+alter table public.tenants enable row level security; alter table public.companies enable row level security; alter table public.profiles enable row level security; alter table public.roles enable row level security; alter table public.audit_logs enable row level security;
+-- All product-domain tables must follow this tenant isolation predicate.
+create policy "tenant members read companies" on public.companies for select using (tenant_id = (select tenant_id from public.profiles where id = auth.uid()));
