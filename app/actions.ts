@@ -36,6 +36,82 @@ export async function createAgencyRate(form: FormData) {
   revalidatePath("/products");
 }
 
+export async function createSupplier(form: FormData) {
+  const { supabase, tenantId } = await getTenantContext();
+  const payload = {
+    tenant_id: tenantId,
+    code: text(form, "code").toUpperCase(),
+    legal_name: text(form, "legal_name"),
+    supplier_type: text(form, "supplier_type") || "ACTIVITY",
+    status: "ACTIVE",
+    default_currency: text(form, "currency").toUpperCase() || "USD",
+    country: text(form, "country"),
+    city: text(form, "city"),
+  };
+  if (!payload.code || !payload.legal_name || !payload.country || !payload.city) fail("Código, nombre, país y ciudad son obligatorios");
+  const { error } = await supabase.from("suppliers").insert(payload);
+  if (error) fail(`No se pudo crear el proveedor: ${error.message}`);
+  revalidatePath("/products");
+}
+
+export async function createCatalogProduct(form: FormData) {
+  const { supabase, tenantId } = await getTenantContext();
+  const supplierId = text(form, "supplier_id");
+  const code = text(form, "code").toUpperCase();
+  const name = text(form, "name");
+  const currency = text(form, "currency").toUpperCase() || "USD";
+  const validFrom = text(form, "valid_from");
+  const validTo = text(form, "valid_to");
+  const costAmount = number(form, "cost_amount");
+  if (!supplierId || !code || !name || !validFrom || !validTo || costAmount < 0) fail("Completa los datos del producto y su coste base");
+
+  const { data: product, error: productError } = await supabase.from("products").insert({
+    tenant_id: tenantId,
+    supplier_id: supplierId,
+    code,
+    type: text(form, "type") || "ACTIVITY",
+    name,
+    destination: text(form, "destination"),
+    status: "ACTIVE",
+    default_currency: currency,
+  }).select("id").single();
+  if (productError || !product) throw new Error(`No se pudo crear el producto: ${productError?.message ?? "error desconocido"}`);
+  const productId = product.id;
+
+  const contractCode = `${code}-${validFrom.slice(0, 4)}`;
+  const { data: contract, error: contractError } = await supabase.from("contracts").insert({
+    tenant_id: tenantId,
+    supplier_id: supplierId,
+    code: contractCode,
+    name: `Contrato base · ${name}`,
+    valid_from: validFrom,
+    valid_to: validTo,
+    currency,
+    status: "ACTIVE",
+  }).select("id").single();
+  if (contractError || !contract) {
+    await supabase.from("products").delete().eq("id", productId);
+    throw new Error(`No se pudo crear el contrato base: ${contractError?.message ?? "error desconocido"}`);
+  }
+
+  const { error: rateError } = await supabase.from("contract_rates").insert({
+    tenant_id: tenantId,
+    contract_id: contract.id,
+    product_id: productId,
+    valid_from: validFrom,
+    valid_to: validTo,
+    cost_amount: costAmount,
+    currency,
+    unit: text(form, "unit") || "PER_PERSON",
+  });
+  if (rateError) {
+    await supabase.from("contracts").delete().eq("id", contract.id);
+    await supabase.from("products").delete().eq("id", productId);
+    fail(`No se pudo guardar el coste base: ${rateError.message}`);
+  }
+  revalidatePath("/products");
+}
+
 export async function createQuote(form: FormData) {
   const { supabase, tenantId } = await getTenantContext();
   const agencyId = text(form, "agency_id") || null;
@@ -83,11 +159,19 @@ export async function convertQuoteToBooking(form: FormData) {
 }
 
 export async function updateTask(form: FormData) {
-  const { supabase } = await getTenantContext();
+  const { supabase, user } = await getTenantContext();
   const taskId = text(form, "task_id");
   const status = text(form, "status");
   const assignedTo = text(form, "assigned_to") || null;
-  const { error } = await supabase.from("operations_tasks").update({ status, assigned_to: assignedTo }).eq("id", taskId);
+  const resolutionNotes = text(form, "resolution_notes") || null;
+  if (status === "DONE" && !resolutionNotes) fail("Describe brevemente cómo se resolvió la tarea antes de completarla");
+  const { error } = await supabase.from("operations_tasks").update({
+    status,
+    assigned_to: assignedTo,
+    resolution_notes: resolutionNotes,
+    completed_at: status === "DONE" ? new Date().toISOString() : null,
+    completed_by: status === "DONE" ? user.id : null,
+  }).eq("id", taskId);
   if (error) fail(`No se pudo actualizar la tarea: ${error.message}`);
   revalidatePath("/operations"); revalidatePath("/dashboard");
 }

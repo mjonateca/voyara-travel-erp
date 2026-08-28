@@ -7,7 +7,10 @@ export const activityTypeLabels: Record<string, string> = { SERVICE: "Servicio",
 
 const taskTitles: Record<string, string> = {
   "Assign airport transfer vehicle": "Asignar vehículo para el traslado del aeropuerto",
-  "Confirm Saona supplier request": "Confirmar la solicitud con el proveedor de Saona"
+  "Confirm Saona supplier request": "Confirmar la solicitud con el proveedor de Saona",
+  "Confirm transport voucher": "Confirmar el comprobante del traslado",
+  "Reconfirm hotel allotment": "Reconfirmar el cupo con el hotel",
+  "Collect pending payment": "Gestionar el cobro pendiente"
 };
 
 export function translateTaskTitle(title: string) { return taskTitles[title] ?? title; }
